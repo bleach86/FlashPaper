@@ -35,7 +35,7 @@
 		# open the db (create if it doesnt exist)
 		try {
 			$db = new PDO("sqlite:{$dbName}");
-			$db->exec('CREATE TABLE IF NOT EXISTS "secrets" ("id" TEXT PRIMARY KEY, "iv" TEXT, "hash" TEXT, "secret" TEXT, "prune_epoch" INTEGER)');
+			$db->exec('CREATE TABLE IF NOT EXISTS "secrets" ("id" TEXT PRIMARY KEY, "iv" TEXT, "hash" TEXT, "secret" TEXT, "views" INTEGER, "views_max" INTEGER, "prune_epoch" INTEGER)');
 			return $db;
 		} catch (Exception $e) {
 			# re-throw exception so we can catch it higer up with a more helpful error message
@@ -78,12 +78,14 @@
 		}
 	}
 
-	function writeSecret($db, $id, $iv, $hash, $secret, $prune_epoch) {
-		$statement = $db->prepare('INSERT INTO "secrets" ("id", "iv", "hash", "secret", "prune_epoch") VALUES (:id, :iv, :hash, :secret, :prune_epoch)');
+	function writeSecret($db, $id, $iv, $hash, $secret, $views, $views_max, $prune_epoch) {
+		$statement = $db->prepare('INSERT INTO "secrets" ("id", "iv", "hash", "secret", "views", "views_max", "prune_epoch") VALUES (:id, :iv, :hash, :secret, :views, :views_max, :prune_epoch)');
 		$statement->bindValue(':id', $id);
 		$statement->bindValue(':iv', $iv);
 		$statement->bindValue(':hash', $hash);
 		$statement->bindValue(':secret', $secret);
+		$statement->bindValue(':views', $views);
+		$statement->bindValue(':views_max', $views_max);
 		$statement->bindValue(':prune_epoch', $prune_epoch);
 		if ( ! $statement->execute() ) {
 			throw new Exception('Failed to write to database!');
@@ -99,6 +101,15 @@
 			$result = $statement->fetch(PDO::FETCH_ASSOC);
 			return $result;
 		}
+	}
+
+	function updateViews($db, $id, $views) {
+		$statement = $db->prepare('UPDATE "secrets" SET views=:views WHERE id = :id');
+		$statement->bindValue(':id', $id);
+		$statement->bindValue(':views', $views);
+		if ( ! $statement->execute() ) {
+			throw new Exception('Failed to read from database!');
+		} 
 	}
 
 	function deleteSecret($db, $id) {
@@ -137,7 +148,7 @@
 		return $key;
 	}
 
-	function store_secret($secret, $settings) {
+	function store_secret($secret, $settings, $expire_days, $views_max) {
 		#connect to sqlite db
 		$db = connect();
 
@@ -149,7 +160,7 @@
 		#generate expiration datetime
 		$min_days = $settings['prune']['min_days'];
 		$max_days = $settings['prune']['max_days'];
-		$prune_epoch = rand(time() + (86400 * $min_days), time() + (86400 * $max_days));
+		$prune_epoch = time() + (86400 * $expire_days);
 
 		#generate k value for url (id + key)
 		$k = $id . $key;
@@ -161,8 +172,12 @@
 		$secret = encrypt_decrypt(true, $key, $iv, $secret);
 		$secret = encrypt_decrypt(true, getStaticKey(), $iv, $secret);
 
+		$views = 0;
+
+		$views_max = (int)$views_max;
+
 		#write id, iv, bcrypt password hash, and secret to database
-		writeSecret($db, $id, $iv, $hash, $secret, $prune_epoch);
+		writeSecret($db, $id, $iv, $hash, $secret, $views, $views_max, $prune_epoch);
 
 		#close db
 		$db = null;
@@ -200,6 +215,9 @@
 		$iv = $secretQuery['iv'];
 		$hash = $secretQuery['hash'];
 		$secret = $secretQuery['secret'];
+		$views = $secretQuery['views'];
+		$views_max = $secretQuery['views_max'];
+		$views_left = $views_max - ($views+1);
 
 		#verify hash from DB equals hash of id + key from URL
 		if ( ! password_verify($id . $key, $hash) ) {
@@ -209,18 +227,25 @@
 		#decrypt secret with the static key, and then with url key
 		$secret = encrypt_decrypt(false, getStaticKey(), $iv, $secret);
 		$secret = encrypt_decrypt(false, $key, $iv, $secret);
+		
 
-		#delete secret and verify it's gone
-		if ( ! deleteSecret($db, $id) ) {
-			# if we cant destroy it, dont give the secret out
-			throw new Exception('Failed to destroy secret!');
+		if ( $views + 1 >= $views_max) {
+			#delete secret and verify it's gone
+			if ( ! deleteSecret($db, $id) ) {
+				# if we cant destroy it, dont give the secret out
+				throw new Exception('Failed to destroy secret!');
+			}
+			#close db
+			$db = null;
+			return array($secret, 0);
+		} else {
+			updateViews($db, $id, $views+1);
+
+			#close db
+			$db = null;
+			#return decrypted text
+			return array($secret, $views_left);
 		}
-
-		#close db
-		$db = null;
-
-		#return decrypted text
-		return $secret;
 	}
 
 ?>
