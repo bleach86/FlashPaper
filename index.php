@@ -86,6 +86,7 @@
 			throw new exception($settings['messages']['error_secret_too_long']);
 		}
 
+
 		$views_max = $_POST['view-count'];
 
 		if ( $views_max == 1 ) {
@@ -97,6 +98,7 @@
 
 
 		$message = store_secret($_POST['secret'], $settings, $_POST['expire-days'], $views_max);
+
 
 		if ($settings['return_full_url'] == true) {
 			$message = build_url($message);
