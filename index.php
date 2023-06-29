@@ -91,7 +91,7 @@
 		if ( $views_max == 1 ) {
 			$views_message = htmlentities($settings['messages']['view_code_subheader']);
 		} else {
-			$views_message = htmlentities("Share this URL via email, chat, or another messaging service. It will self-destruct after being viewed " . $views_max . " times." )
+			$views_message = htmlentities("Share this URL via email, chat, or another messaging service. It will self-destruct after being viewed " . $views_max . " times." );
 		}
 
 
