@@ -86,7 +86,19 @@
 			throw new exception($settings['messages']['error_secret_too_long']);
 		}
 
-		$message = store_secret($_POST['secret'], $settings, $_POST['expire-days'], $_POST['view-count']);
+
+		$views_max = $_POST['view-count'];
+
+		if ( $views_max == 1 ) {
+			$views_message = htmlentities($settings['messages']['view_code_subheader']);
+		} else {
+			$views_message = htmlentities("Share this URL via email, chat, or another messaging service. It will self-destruct after being viewed " . $views_max . " times." );
+		}
+
+
+
+		$message = store_secret($_POST['secret'], $settings, $_POST['expire-days'], $views_max);
+
 
 		if ($settings['return_full_url'] == true) {
 			$message = build_url($message);
