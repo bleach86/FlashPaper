@@ -157,6 +157,18 @@
 		$iv = crypto_rand_string(16);
 		$key = crypto_rand_string(32);
 
+		if ( $expire_days > 365 ) {
+			$expire_days = 365;
+		} elseif ( $expire_days < 1 ) {
+			$expire_days = 1;
+		}
+
+		if ( $views_max > 10000 ) {
+			$views_max = 10000;
+		} elseif ( $views_max < 1 ) {
+			$views_max = 1;
+		}
+
 		#generate expiration datetime
 		$min_days = $settings['prune']['min_days'];
 		$max_days = $settings['prune']['max_days'];
