@@ -8,6 +8,9 @@
 	if (isset($_POST['json']) && !empty($_POST['secret'])) {
 		header("Content-Type: application/json");
 		die(display_secret_code(true));
+	} elseif (isset($_POST['json']) && !empty($_POST['k'])) {
+		header("Content-Type: application/json");
+		die(display_secret(true));
 	}
 
 	require_once('html/header.php'); # display header
@@ -61,7 +64,7 @@
 		require_once('html/confirm.php');
 	}
 
-	function display_secret() {
+	function display_secret($return_only_json = false) {
 		global $settings;
 
 		$secret = retrieve_secret($_POST['k']);
@@ -72,6 +75,10 @@
 			$view_message = htmlentities($settings['messages']['view_secret_subheader']);
 		} else {
 			$view_message = htmlentities("There are " . $views_left . " views until destruction.");
+		}
+
+		if ($return_only_json) {
+			return json_encode(array("message" => $message, "views_left" => $views_left), JSON_UNESCAPED_SLASHES);
 		}
 
 		require_once('html/view_secret.php');
